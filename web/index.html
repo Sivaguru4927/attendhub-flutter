@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="AttendHub - scan, track and manage attendance.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="AttendHub">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+  <title>AttendHub</title>
+  <link rel="manifest" href="manifest.json">
+
+  <script>
+    // Remember the live camera stream so the flashlight can be switched on it.
+    (function () {
+      var md = navigator.mediaDevices;
+      if (md && md.getUserMedia) {
+        var orig = md.getUserMedia.bind(md);
+        md.getUserMedia = function (constraints) {
+          return orig(constraints).then(function (stream) {
+            try {
+              if (stream.getVideoTracks().length > 0) {
+                window.__attendStreams = (window.__attendStreams || []).concat([stream]);
+              }
+            } catch (e) {}
+            return stream;
+          });
+        };
+      }
+      // Returns 'on' | 'off' | 'unsupported' | 'no-camera' | 'error: ...'
+      window.attendTorch = async function (on) {
+        var list = window.__attendStreams || [];
+        var track = null;
+        for (var i = list.length - 1; i >= 0 && !track; i--) {
+          var vt = list[i].getVideoTracks();
+          for (var j = 0; j < vt.length; j++) {
+            if (vt[j].readyState === 'live') { track = vt[j]; break; }
+          }
+        }
+        if (!track) return 'no-camera';
+        var caps = {};
+        try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch (e) {}
+        if (!('torch' in caps)) return 'unsupported';
+        try {
+          await track.applyConstraints({ advanced: [{ torch: !!on }] });
+          return on ? 'on' : 'off';
+        } catch (e) {
+          return 'error: ' + (e && e.message ? e.message : e);
+        }
+      };
+    })();
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

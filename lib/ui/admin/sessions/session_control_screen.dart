@@ -44,11 +44,93 @@ class SessionControlScreen extends ConsumerWidget {
             session: session,
             scanCount: scanCountAsync.valueOrNull ?? 0,
             onEndSession: () => _confirmEnd(context, ref, session),
+            onReopen: () => _reopen(context, ref, session),
+            onDelete: () => _confirmDelete(context, ref, session),
             onRefreshCount: () => ref.invalidate(scanCountProvider(sessionId)),
           );
         },
       ),
     );
+  }
+
+  Future<void> _reopen(
+    BuildContext context,
+    WidgetRef ref,
+    AttendanceSession session,
+  ) async {
+    final hours = await showDialog<num>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Re-open for how long?'),
+        children: [
+          for (final h in const [1, 2, 4, 8, 12, 24])
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(h),
+              child: Text(h == 1 ? '1 hour' : '$h hours'),
+            ),
+        ],
+      ),
+    );
+    if (hours == null || !context.mounted) return;
+    try {
+      await ref
+          .read(sessionsListProvider.notifier)
+          .reopenSession(session.id, hours);
+      ref.invalidate(sessionDetailProvider(session.id));
+      ref.invalidate(scanCountProvider(session.id));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Session re-opened')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not re-open: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    AttendanceSession session,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete Session?'),
+        content: Text(
+          '"${session.name}" and ALL of its scans will be permanently '
+          'deleted. Your master lists are not touched.\n\n'
+          'Download the report first if you still need it. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await ref.read(sessionsListProvider.notifier).deleteSession(session.id);
+      if (context.mounted) context.pop();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _confirmEnd(
@@ -94,12 +176,16 @@ class _SessionControlBody extends StatelessWidget {
     required this.session,
     required this.scanCount,
     required this.onEndSession,
+    required this.onReopen,
+    required this.onDelete,
     required this.onRefreshCount,
   });
 
   final AttendanceSession session;
   final int scanCount;
   final VoidCallback onEndSession;
+  final VoidCallback onReopen;
+  final VoidCallback onDelete;
   final VoidCallback onRefreshCount;
 
   String get shareUrl =>
@@ -276,6 +362,28 @@ class _SessionControlBody extends StatelessWidget {
               label: const Text('End Session'),
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.error,
+                minimumSize: const Size.fromHeight(50),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 14),
+            FilledButton.icon(
+              onPressed: onReopen,
+              icon: const Icon(Icons.play_circle_outline, size: 20),
+              label: const Text('Re-open Session'),
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                minimumSize: const Size.fromHeight(50),
+              ),
+            ),
+            const SizedBox(height: 14),
+            OutlinedButton.icon(
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline, size: 20),
+              label: const Text('Delete Session'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
                 minimumSize: const Size.fromHeight(50),
               ),
             ),

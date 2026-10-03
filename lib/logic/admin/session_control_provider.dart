@@ -62,6 +62,18 @@ class SessionsListNotifier extends AsyncNotifier<List<AttendanceSession>> {
     await ref.read(sessionRepositoryProvider).endSession(sessionId);
     await refresh();
   }
+
+  /// Re-opens an ended session for [hours] more hours.
+  Future<void> reopenSession(String sessionId, num hours) async {
+    await ref.read(sessionRepositoryProvider).reopenSession(sessionId, hours);
+    await refresh();
+  }
+
+  /// Permanently deletes a session and all of its scans.
+  Future<void> deleteSession(String sessionId) async {
+    await ref.read(sessionRepositoryProvider).deleteSession(sessionId);
+    await refresh();
+  }
 }
 
 // ---------------------------------------------------------------------------

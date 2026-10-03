@@ -36,6 +36,19 @@ class SessionRepository {
     await _supabase.rpc('end_session', params: {'p_session_id': sessionId});
   }
 
+  /// Re-opens an ended session for [hours] more hours (same volunteer link).
+  Future<void> reopenSession(String sessionId, num hours) async {
+    await _supabase.rpc('reopen_session', params: {
+      'p_session_id': sessionId,
+      'p_duration_hours': hours,
+    });
+  }
+
+  /// Permanently deletes a session together with all of its scans.
+  Future<void> deleteSession(String sessionId) async {
+    await _supabase.rpc('delete_session', params: {'p_session_id': sessionId});
+  }
+
   Future<List<AttendanceSession>> listSessions() async {
     final rows = await _supabase
         .from('sessions')

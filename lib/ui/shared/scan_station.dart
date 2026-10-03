@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/constants.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/utils/web_torch.dart';
 import '../../core/widgets/laser_scanner_overlay.dart';
 import '../../data/models/scan_event.dart';
 import 'scan_result_card.dart';
@@ -56,6 +58,10 @@ class _ScanStationState extends State<ScanStation> with WidgetsBindingObserver {
   String _pendingMethod = 'QR Camera';
   DateTime? _pendingReadAt;
   bool _submitting = false;
+
+  // flashlight state for the web build (controlled through web/index.html)
+  bool _webTorchOn = false;
+  bool _webTorchBad = false;
 
   ScanResult? _result;
   int _okCount = 0;
@@ -257,11 +263,34 @@ class _ScanStationState extends State<ScanStation> with WidgetsBindingObserver {
   // Toolbar actions
   // -------------------------------------------------------------------------
   Future<void> _toggleTorch(bool unavailable) async {
+    // WEB: switch the torch directly on the live camera track.
+    if (kIsWeb) {
+      final r = await webTorchSet(!_webTorchOn);
+      if (!mounted) return;
+      if (r == 'on' || r == 'off') {
+        setState(() {
+          _webTorchOn = r == 'on';
+          _webTorchBad = false;
+        });
+        return;
+      }
+      setState(() {
+        _webTorchOn = false;
+        _webTorchBad = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(r == 'unsupported' || r == 'no-camera'
+            ? 'This camera has no flashlight in the browser. Use Chrome on '
+                'Android with the BACK camera (try the switch-camera button).'
+            : 'Flashlight failed: $r'),
+      ));
+      return;
+    }
+
+    // ANDROID / iOS app
     if (unavailable) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text(
-            'Flashlight is not available on this camera / browser. '
-            'It works on most Android phones (Chrome) and in the Android app.'),
+        content: Text('Flashlight is not available on this camera.'),
       ));
       return;
     }
@@ -278,6 +307,12 @@ class _ScanStationState extends State<ScanStation> with WidgetsBindingObserver {
     try {
       await _scanner.switchCamera();
     } catch (_) {}
+    if (mounted) {
+      setState(() {
+        _webTorchOn = false;
+        _webTorchBad = false;
+      });
+    }
   }
 
   Future<void> _manualEntry() async {
@@ -418,8 +453,9 @@ class _ScanStationState extends State<ScanStation> with WidgetsBindingObserver {
           ValueListenableBuilder<MobileScannerState>(
             valueListenable: _scanner,
             builder: (context, state, _) {
-              final unavailable = state.torchState == TorchState.unavailable;
-              final on = state.torchState == TorchState.on;
+              final unavailable =
+                  kIsWeb ? _webTorchBad : state.torchState == TorchState.unavailable;
+              final on = kIsWeb ? _webTorchOn : state.torchState == TorchState.on;
               return IconButton(
                 tooltip: unavailable ? 'Flashlight not available' : 'Flashlight',
                 onPressed: () => _toggleTorch(unavailable),
