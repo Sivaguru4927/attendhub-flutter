@@ -1,0 +1,55 @@
+name: attend_hub
+description: "AttendHub - Secure Session-Based Attendance Scanning System"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Backend & Realtime
+  supabase_flutter: ^2.8.0
+
+  # Routing & Navigation
+  go_router: ^14.7.0
+
+  # Reactive State Management
+  flutter_riverpod: ^2.6.1
+
+  # QR & Barcode Scanning (mobile_scanner works on Android, iOS and Web)
+  mobile_scanner: ^6.0.4
+
+  # Design & UI
+  google_fonts: ^6.2.1
+
+  # Excel import / export
+  excel: ^4.0.6
+  file_picker: ^8.1.7
+
+  # Sharing content (session links)
+  share_plus: ^10.1.3
+
+
+  # Persistent storage for preferences (scan hold time)
+  shared_preferences: ^2.3.4
+
+  # IDs and timestamps
+  uuid: ^4.5.1
+  intl: ^0.19.0
+
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/sounds/
