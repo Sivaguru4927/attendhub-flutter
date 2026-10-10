@@ -44,16 +44,30 @@ jobs:
                       } catch (Throwable ignored) {
                           p.android.compileSdkVersion(36)
                       }
+                      // Keep the camera/barcode libraries intact in the APK
+                      // (code shrinking can break them on some phones).
+                      if (p.name == 'app') {
+                          try { p.android.buildTypes.release.shrinkResources = false } catch (Throwable ignored) {}
+                          try { p.android.buildTypes.release.minifyEnabled = false } catch (Throwable ignored) {}
+                      }
                   }
               }
           }
           GRADLE
           cat $HOME/.gradle/init.d/force-compile-sdk.gradle
 
+      - name: Show the permissions in the manifest
+        run: grep -n "uses-permission\|uses-feature\|android:label" android/app/src/main/AndroidManifest.xml
+
       - run: flutter pub get
 
       - name: Build release APK
-        run: flutter build apk --release --dart-define=APP_BASE_URL=${{ vars.APP_BASE_URL }}
+        run: >
+          flutter build apk --release --no-shrink
+          "--dart-define=APP_BASE_URL=${{ vars.APP_BASE_URL }}"
+          "--dart-define=SUPABASE_URL=${{ vars.SUPABASE_URL }}"
+          "--dart-define=SUPABASE_ANON_KEY=${{ vars.SUPABASE_ANON_KEY }}"
+          "--dart-define=DEPT_NAME=${{ vars.DEPT_NAME }}"
 
       - name: Name the file
         run: cp build/app/outputs/flutter-apk/app-release.apk AttendHub.apk
