@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/config/constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/utils/web_torch.dart';
-import '../../core/widgets/laser_scanner_overlay.dart';
+import '../../core/widgets/barcode_guide_overlay.dart';
 import '../../data/models/scan_event.dart';
 import 'scan_result_card.dart';
 
@@ -59,6 +59,9 @@ class _ScanStationState extends State<ScanStation> with WidgetsBindingObserver {
   DateTime? _pendingReadAt;
   bool _submitting = false;
 
+  // camera start problems: try once more by ourselves
+  bool _autoRetried = false;
+
   // flashlight state for the web build (controlled through web/index.html)
   bool _webTorchOn = false;
   bool _webTorchBad = false;
@@ -80,6 +83,7 @@ class _ScanStationState extends State<ScanStation> with WidgetsBindingObserver {
       detectionTimeoutMs: 150,
       facing: CameraFacing.back,
     );
+    _scanner.addListener(_onScannerChanged);
     _tick = Timer.periodic(const Duration(milliseconds: 50), _onTick);
     _loadHold();
   }
@@ -105,19 +109,57 @@ class _ScanStationState extends State<ScanStation> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _tick?.cancel();
     _resultTimer?.cancel();
+    _scanner.removeListener(_onScannerChanged);
     _progress.dispose();
     _focus.dispose();
     _scanner.dispose();
     super.dispose();
   }
 
+  // Same rules as the scanner library itself: do nothing until the camera
+  // permission is settled (the permission pop-up also pauses the app, and
+  // restarting the camera at that moment caused "An unexpected error
+  // occurred"), and never start a camera that is already running.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _scanner.start().catchError((_) {});
-    } else if (state == AppLifecycleState.paused) {
-      _scanner.stop().catchError((_) {});
+    if (!_scanner.value.hasCameraPermission) return;
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (!_scanner.value.isRunning) {
+          _scanner.start().catchError((_) {});
+        }
+        break;
+      case AppLifecycleState.inactive:
+        _scanner.stop().catchError((_) {});
+        break;
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        break;
     }
+  }
+
+  // If the camera fails to start with a vague error, try once more by itself
+  // after a short pause (the first start can collide with the permission
+  // pop-up or another app that was still releasing the camera).
+  void _onScannerChanged() {
+    final err = _scanner.value.error;
+    if (err == null || _autoRetried) return;
+    if (err.errorCode == MobileScannerErrorCode.permissionDenied ||
+        err.errorCode == MobileScannerErrorCode.unsupported) {
+      return;
+    }
+    _autoRetried = true;
+    Future<void>.delayed(const Duration(milliseconds: 900), () async {
+      if (!mounted) return;
+      try {
+        await _scanner.stop();
+      } catch (_) {}
+      try {
+        await _scanner.start();
+      } catch (_) {}
+      if (mounted) setState(() {});
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -259,6 +301,70 @@ class _ScanStationState extends State<ScanStation> with WidgetsBindingObserver {
     return KeyEventResult.ignored;
   }
 
+  // Shown when the camera could not start: the real reason + Retry button.
+  Widget _cameraError(MobileScannerException error) {
+    final code = error.errorCode.name;
+    final msg = error.errorDetails?.message;
+    final details = error.errorDetails?.details?.toString();
+    String hint;
+    switch (error.errorCode) {
+      case MobileScannerErrorCode.permissionDenied:
+        hint = 'Camera permission is off. Open phone Settings > Apps > '
+            'AttendHub > Permissions > Camera > Allow, then tap Retry.';
+        break;
+      case MobileScannerErrorCode.unsupported:
+        hint = 'This device or browser does not support the scanner.';
+        break;
+      default:
+        hint = 'Close other apps that use the camera, then tap Retry. '
+            'You can also type the roll number with the keyboard button.';
+    }
+    return Container(
+      color: Colors.black,
+      alignment: Alignment.center,
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.videocam_off_outlined,
+              color: Colors.white70, size: 44),
+          const SizedBox(height: 14),
+          const Text('Camera could not start',
+              style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text(hint,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, fontSize: 13)),
+          const SizedBox(height: 12),
+          SelectableText(
+            'Error: $code'
+            '${msg != null && msg.isNotEmpty ? '\n$msg' : ''}'
+            '${details != null && details.isNotEmpty ? '\n$details' : ''}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white38, fontSize: 11),
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            onPressed: () async {
+              try {
+                await _scanner.stop();
+              } catch (_) {}
+              try {
+                await _scanner.start();
+              } catch (_) {}
+              if (mounted) setState(() {});
+            },
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Toolbar actions
   // -------------------------------------------------------------------------
@@ -398,18 +504,32 @@ class _ScanStationState extends State<ScanStation> with WidgetsBindingObserver {
         autofocus: true,
         onKeyEvent: _onKey,
         child: SafeArea(
-          child: Stack(
-            children: [
-              MobileScanner(controller: _scanner, onDetect: _onDetect),
-              const LaserScannerOverlay(),
-              Positioned(top: 0, left: 0, right: 0, child: _header()),
-              Positioned(
-                left: 16,
-                right: 16,
-                bottom: 12,
-                child: _bottom(),
-              ),
-            ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final size = Size(constraints.maxWidth, constraints.maxHeight);
+              // The band the barcode must be placed in. It is both drawn on
+              // screen and used as the area the camera reads.
+              final guide = BarcodeGuide.rectFor(size);
+              return Stack(
+                children: [
+                  MobileScanner(
+                    controller: _scanner,
+                    onDetect: _onDetect,
+                    scanWindow: guide,
+                    errorBuilder: (context, error, [child]) =>
+                        _cameraError(error),
+                  ),
+                  BarcodeGuideOverlay(guide: guide),
+                  Positioned(top: 0, left: 0, right: 0, child: _header()),
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 12,
+                    child: _bottom(),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),
