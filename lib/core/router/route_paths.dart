@@ -2,6 +2,7 @@
 abstract final class RoutePaths {
   // Admin
   static const String adminLogin = '/admin/login';
+  static const String forgotPassword = '/admin/forgot-password';
   static const String pendingApproval = '/admin/pending';
   static const String adminDashboard = '/admin/dashboard';
   static const String sessionControl = '/admin/sessions';

@@ -70,5 +70,19 @@ class AuthActions {
   Future<void> signUp({required String email, required String password}) =>
       _repo.signUp(email: email, password: password);
 
+  Future<void> sendPasswordResetCode(String email) =>
+      _repo.sendPasswordResetCode(email);
+
+  Future<void> resetPasswordWithCode({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) =>
+      _repo.resetPasswordWithCode(
+        email: email,
+        code: code,
+        newPassword: newPassword,
+      );
+
   Future<void> signOut() => _repo.signOut();
 }

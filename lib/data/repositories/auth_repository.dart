@@ -22,6 +22,28 @@ class AuthRepository {
   Future<void> signUp({required String email, required String password}) =>
       _supabase.auth.signUp(email: email, password: password);
 
+  /// Emails a one-time recovery code to [email] (forgot password, step 1).
+  ///
+  /// Supabase answers the same way whether or not the address is registered,
+  /// so this never reveals which emails have accounts.
+  Future<void> sendPasswordResetCode(String email) =>
+      _supabase.auth.resetPasswordForEmail(email);
+
+  /// Checks the emailed [code] and sets [newPassword] (forgot password,
+  /// step 2). Throws [AuthException] if the code is wrong or has expired.
+  Future<void> resetPasswordWithCode({
+    required String email,
+    required String code,
+    required String newPassword,
+  }) async {
+    await _supabase.auth.verifyOTP(
+      email: email,
+      token: code,
+      type: OtpType.recovery,
+    );
+    await _supabase.auth.updateUser(UserAttributes(password: newPassword));
+  }
+
   /// Signs out the current user.
   Future<void> signOut() => _supabase.auth.signOut();
 

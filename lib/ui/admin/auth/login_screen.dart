@@ -172,7 +172,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
                           // Tab content
                           SizedBox(
-                            height: 280,
+                            height: 330,
                             child: TabBarView(
                               controller: _tabs,
                               children: [
@@ -233,7 +233,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             validator: (v) =>
                 (v == null || v.length < 6) ? 'Min 6 characters' : null,
           ),
-          const SizedBox(height: 24),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: _loading
+                  ? null
+                  : () => context.push(
+                        RoutePaths.forgotPassword,
+                        extra: _emailCtrl.text.trim(),
+                      ),
+              child: const Text('Forgot password?'),
+            ),
+          ),
+          const SizedBox(height: 8),
           FilledButton(
             onPressed: _loading ? null : _signIn,
             style: FilledButton.styleFrom(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../logic/auth/auth_provider.dart';
+import '../../ui/admin/auth/forgot_password_screen.dart';
 import '../../ui/admin/auth/login_screen.dart';
 import '../../ui/admin/auth/pending_approval_screen.dart';
 import '../../ui/admin/dashboard/admin_dashboard_screen.dart';
@@ -46,13 +47,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           switch (adminStatus) {
             case AdminStatus.unauthenticated:
               if (isAdminRoute &&
-                  state.matchedLocation != RoutePaths.adminLogin) {
+                  state.matchedLocation != RoutePaths.adminLogin &&
+                  state.matchedLocation != RoutePaths.forgotPassword) {
                 return RoutePaths.adminLogin;
               }
               return null;
 
             case AdminStatus.pending:
-              if (state.matchedLocation != RoutePaths.pendingApproval) {
+              // The reset screen stays open: a recovery code signs the user
+              // in before the new password is saved.
+              if (state.matchedLocation != RoutePaths.pendingApproval &&
+                  state.matchedLocation != RoutePaths.forgotPassword) {
                 return RoutePaths.pendingApproval;
               }
               return null;
@@ -80,6 +85,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: RoutePaths.adminLogin,
         name: 'login',
         builder: (_, __) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: RoutePaths.forgotPassword,
+        name: 'forgot-password',
+        builder: (_, state) => ForgotPasswordScreen(
+          initialEmail: state.extra is String ? state.extra as String : '',
+        ),
       ),
       GoRoute(
         path: RoutePaths.pendingApproval,
