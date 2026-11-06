@@ -70,6 +70,9 @@ class AuthActions {
   Future<void> signUp({required String email, required String password}) =>
       _repo.signUp(email: email, password: password);
 
+  Future<bool> isEmailApprovedAdmin(String email) =>
+      _repo.isEmailApprovedAdmin(email);
+
   Future<void> sendPasswordResetCode(String email) =>
       _repo.sendPasswordResetCode(email);
 

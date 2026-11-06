@@ -22,6 +22,14 @@ class AuthRepository {
   Future<void> signUp({required String email, required String password}) =>
       _supabase.auth.signUp(email: email, password: password);
 
+  /// True only when [email] belongs to an admin you have already approved.
+  /// (Pending, revoked and unknown emails all give false.)
+  Future<bool> isEmailApprovedAdmin(String email) async {
+    final res = await _supabase
+        .rpc('is_email_approved_admin', params: {'p_email': email});
+    return res == true;
+  }
+
   /// Emails a one-time recovery code to [email] (forgot password, step 1).
   ///
   /// Supabase answers the same way whether or not the address is registered,

@@ -38,6 +38,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
   final _resetFormKey = GlobalKey<FormState>();
 
   bool _codeSent = false;
+  bool _notApproved = false;
   bool _loading = false;
   bool _obscure = true;
   int _cooldown = 0;
@@ -96,11 +97,22 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
   Future<void> _sendCode() async {
     if (!_emailFormKey.currentState!.validate()) return;
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _notApproved = false;
+    });
     try {
-      await ref
-          .read(authActionsProvider)
-          .sendPasswordResetCode(_emailCtrl.text.trim());
+      final email = _emailCtrl.text.trim();
+      final actions = ref.read(authActionsProvider);
+      // Only approved admins can reset their password here. New people
+      // must use "Request Access" and wait for approval first.
+      final approved = await actions.isEmailApprovedAdmin(email);
+      if (!mounted) return;
+      if (!approved) {
+        setState(() => _notApproved = true);
+        return;
+      }
+      await actions.sendPasswordResetCode(email);
       if (!mounted) return;
       setState(() => _codeSent = true);
       _startCooldown();
@@ -273,6 +285,22 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 : null,
             onFieldSubmitted: (_) => _sendCode(),
           ),
+          if (_notApproved) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.errorContainer,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'This email is not an approved admin yet. New here? Use '
+                '"Request Access" on the sign-in page and wait for approval. '
+                'Already requested? Ask an admin to approve you.',
+                style: TextStyle(fontSize: 13, height: 1.35),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           _button('Send Code', _sendCode),
           const SizedBox(height: 4),
